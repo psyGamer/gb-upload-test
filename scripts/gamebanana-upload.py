@@ -28,6 +28,9 @@ def main():
         })
     )
     print(f"Authentication: {auth_res.status_code}")
+    if auth_res.status_code != 200:
+        print(auth_res.text)
+        exit(1)
 
     # Setup browser
     options = Options()
