@@ -35,11 +35,15 @@ jobs:
           source .venv/bin/activate
           pip install requests selenium
       - name: Upload to GameBanana
-        run: |
-          source .venv/bin/activate
-          python scripts/gamebanana-upload.py MyCoolProject.zip
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 5
+          command: |
+            source .venv/bin/activate
+            python scripts/gamebanana-upload.py MyCoolProject.zip
         env:
           GAMEBANANA_USERNAME: AutomaticRelease
           GAMEBANANA_PASSWORD: ${{ secrets.GAMEBANANA_PASSWORD }}
           GAMEBANANA_2FA_URI: ${{ secrets.GAMEBANANA_2FA_URI }}
           GAMEBANANA_MODID: 546692
+        
