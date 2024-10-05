@@ -15,32 +15,42 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.firefox.options import Options
 
 def main():
-    twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
-
-    # Authenticate
-    auth_res = requests.request("POST",
-        url="https://gamebanana.com/apiv11/Member/Authenticate",
-        headers={},
-        data=json.dumps({
-            "_sUsername": os.getenv("GAMEBANANA_USERNAME"),
-            "_sPassword": os.getenv("GAMEBANANA_PASSWORD"),
-            "_nTotp": twofac_code
-        })
-    )
-    print(f"Authentication: {auth_res.status_code}")
-    if auth_res.status_code != 200:
-        print(auth_res.text)
-        exit(1)
-
     # Setup browser
     options = Options()
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     
     driver = webdriver.Firefox(options=options)
 
-    driver.get("http://www.gamebanana.com")
-    driver.add_cookie({ "name": "sess", "value": auth_res.cookies["sess"]})
-    driver.add_cookie({ "name": "rmc", "value": auth_res.cookies["rmc"]})
+    # Go to 404 page for less traffix
+    driver.get("http://www.gamebanana.com/404")
+
+    # Authenticate
+    twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
+    driver.execute_script(fr"""
+        fetch('https://gamebanana.com/apiv11/Member/Authenticate', {{
+            'headers': {{
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Content-Type': 'application/json',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin',
+                'Priority': 'u=0'
+            }},
+            'referrer': 'https://gamebanana.com/members/account/login',
+            'body': '{{
+                "_sUsername":"{os.getenv("GAMEBANANA_USERNAME").replace(r'"', r'\"').replace('\\', '\\\\')}",
+                "_sPassword":"{os.getenv("GAMEBANANA_PASSWORD").replace(r'"', r'\"').replace('\\', '\\\\')}",
+                "_nTotp": "{twofac_code}"
+            }}',
+            'method': 'POST',
+            'mode': 'cors',
+            'credentials': 'include'
+    }});
+    """.replace('\n', ''))
+    driver.implicitly_wait(3)
+    time.sleep(3)
 
     driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
 
@@ -59,7 +69,7 @@ def main():
         time.sleep(1)
 
     # Upload file
-    driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput").send_keys(sys.argv[1])
+    driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
     wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
     wait.until(lambda d : beforeFileCount != driver.execute_script("$('return #4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length"))
     driver.implicitly_wait(5)
