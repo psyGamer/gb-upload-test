@@ -23,6 +23,8 @@ def main():
 
     # Go to 404 page for less traffix
     driver.get("http://www.gamebanana.com/404")
+    driver.implicitly_wait(5)
+    time.sleep(5)
 
     # Authenticate
     twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
@@ -49,11 +51,11 @@ def main():
             'credentials': 'include'
     }});
     """.replace('\n', ''))
-    print(driver.execute_script("return document.body.outerHTML"))
-    driver.implicitly_wait(3)
-    time.sleep(3)
+    driver.implicitly_wait(5)
+    time.sleep(5)
 
     driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
+    print(driver.execute_script("return document.body.outerHTML"))
 
     # Check exiting file count
     beforeFileCount = driver.execute_script("return $('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length")
