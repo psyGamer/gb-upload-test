@@ -27,6 +27,7 @@ def main():
             "_nTotp": twofac_code
         })
     )
+    print(f"Authentication: {auth_res.status_code}")
 
     # Setup browser
     options = Options()
@@ -55,8 +56,6 @@ def main():
         time.sleep(1)
 
     # Upload file
-    driver.find_element(By.CSS_SELECTOR, ".MediaTab > .Title").click()
-
     driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput").send_keys(sys.argv[1])
     wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
     wait.until(lambda d : beforeFileCount != driver.execute_script("$('return #4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length"))
