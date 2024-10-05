@@ -22,59 +22,45 @@ def main():
     
     driver = webdriver.Firefox(options=options)
 
-    # Go to 404 page for less traffix
-    driver.get("http://www.gamebanana.com/404")
+    # Login
+    driver.get("https://gamebanana.com/members/account/login")
     driver.implicitly_wait(5)
     time.sleep(5)
 
-    # Retry until login is successful
-    while True:
-        # Authenticate
-        print("Attempting login...", end="    ", flush=True)
-        twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
-        driver.execute_script(fr"""
-            fetch('https://gamebanana.com/apiv11/Member/Authenticate', {{
-                'headers': {{
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
-                    'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Content-Type': 'application/json',
-                    'Sec-Fetch-Dest': 'empty',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'Priority': 'u=0'
-                }},
-                'referrer': 'https://gamebanana.com/members/account/login',
-                'body': '{{
-                    "_sUsername":"{os.getenv("GAMEBANANA_USERNAME").replace(r'"', r'\"').replace('\\', '\\\\')}",
-                    "_sPassword":"{os.getenv("GAMEBANANA_PASSWORD").replace(r'"', r'\"').replace('\\', '\\\\')}",
-                    "_nTotp": "{twofac_code}"
-                }}',
-                'method': 'POST',
-                'mode': 'cors',
-                'credentials': 'include'
-        }});
-        """.replace('\n', ''))
-        driver.implicitly_wait(5)
-        time.sleep(5)
+    # Remove cookie banner
+    print("Removing cookie banner...", end="    ", flush=True)
+    driver.execute_script("$('.fc-consent-root').remove()")
+    print("Done", flush=True)
+    driver.implicitly_wait(1)
+    time.sleep(1)
 
-        driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
-        driver.implicitly_wait(5)
-        time.sleep(5)
+    print("Performing username + password login...", end="    ", flush=True)
+    driver.find_element(By.ID, "_sUsername").click()
+    driver.find_element(By.ID, "_sUsername").send_keys(os.getenv("GAMEBANANA_USERNAME"))
+    driver.find_element(By.ID, "_sPassword").click()
+    driver.find_element(By.ID, "_sPassword").send_keys(os.getenv("GAMEBANANA_PASSWORD"))
+    driver.execute_script("$('#UsernameLoginForm button').click()")
+    print("Done", flush=True)
 
-        try:
-            driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput")
-            print("Success.", flush=True)
-            break
-        except NoSuchElementException:
-            print("Failure. Retrying...", flush=True)
+    driver.implicitly_wait(5)
+    time.sleep(5)
+
+    # Enter 2FA code if needed
+    if driver.current_url == "https://gamebanana.com/members/account/login":
+        print("Entering 2FA code...", end="    ", flush=True)    
+        driver.find_element(By.ID, "_nTotp").send_keys(compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI")))
+        print("Done", flush=True)
+    
+    driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
+    driver.implicitly_wait(5)
+    time.sleep(5)
 
     # Check exiting file count
     beforeFileCount = driver.execute_script("return $('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length")
     driver.current_url
 
     if beforeFileCount >= 20:
-        print("Deleting oldest file...", end="    ", flush=True)
+        print("Deleting oldest file...", end="    ")
         # Need to delete oldest file to have enough space
         driver.execute_script("$('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li:last button').click()")
 
@@ -82,31 +68,31 @@ def main():
         alert = wait.until(lambda d : d.switch_to.alert)
         alert.accept()
         
-        print("Done.", flush=True)
+        print("Done.")
         driver.implicitly_wait(1)
         time.sleep(1)
 
     # Upload file
-    print("Uploading new file...", end="    ", flush=True)
+    print("Uploading new file...", end="    ")
     driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
     wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
     wait.until(lambda d : beforeFileCount != driver.execute_script("$('return #4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length"))
-    print("Done.", flush=True)
+    print("Done.")
     driver.implicitly_wait(5)
     time.sleep(5)
 
     # Reorder to be the topmost
-    print("Reordering new file to the top...", end="    ", flush=True)
+    print("Reordering new file to the top...", end="    ")
     driver.execute_script("$('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li:last').prependTo('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles')")
-    print("Done.", flush=True)
+    print("Done.")
     driver.implicitly_wait(1)
     time.sleep(1)
 
     # Submit
-    print("Submitting edit...", end="    ", flush=True)
+    print("Submitting edit...", end="    ")
     driver.execute_script("$('.Submit > button').click()")
     driver.implicitly_wait(10)
-    print("Done.", flush=True)
+    print("Done.")
 
     driver.quit()
 
