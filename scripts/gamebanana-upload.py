@@ -50,6 +50,10 @@ def main():
         print("Entering 2FA code...", end="    ", flush=True)    
         driver.find_element(By.ID, "_nTotp").send_keys(compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI")))
         print("Done", flush=True)
+
+        driver.implicitly_wait(5)
+        time.sleep(5)
+        print(driver.execute_script("return document.body.outerHTML"))
     
     driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
     driver.implicitly_wait(5)
