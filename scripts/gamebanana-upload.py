@@ -49,7 +49,7 @@ def main():
             'credentials': 'include'
     }});
     """.replace('\n', ''))
-    print(driver.execute("return document.body.outerHTML"))
+    print(driver.execute_script("return document.body.outerHTML"))
     driver.implicitly_wait(3)
     time.sleep(3)
 
