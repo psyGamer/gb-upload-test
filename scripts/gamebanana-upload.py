@@ -10,6 +10,7 @@ import struct
 import urllib.parse
 from dataclasses import dataclass
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.firefox.options import Options
@@ -17,7 +18,7 @@ from selenium.webdriver.firefox.options import Options
 def main():
     # Setup browser
     options = Options()
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     
     driver = webdriver.Firefox(options=options)
 
@@ -26,41 +27,54 @@ def main():
     driver.implicitly_wait(5)
     time.sleep(5)
 
-    # Authenticate
-    twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
-    driver.execute_script(fr"""
-        fetch('https://gamebanana.com/apiv11/Member/Authenticate', {{
-            'headers': {{
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Content-Type': 'application/json',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin',
-                'Priority': 'u=0'
-            }},
-            'referrer': 'https://gamebanana.com/members/account/login',
-            'body': '{{
-                "_sUsername":"{os.getenv("GAMEBANANA_USERNAME").replace(r'"', r'\"').replace('\\', '\\\\')}",
-                "_sPassword":"{os.getenv("GAMEBANANA_PASSWORD").replace(r'"', r'\"').replace('\\', '\\\\')}",
-                "_nTotp": "{twofac_code}"
-            }}',
-            'method': 'POST',
-            'mode': 'cors',
-            'credentials': 'include'
-    }});
-    """.replace('\n', ''))
-    driver.implicitly_wait(5)
-    time.sleep(5)
+    # Retry until login is successful
+    while True:
+        # Authenticate
+        print("Attempting login...", end="    ")
+        twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
+        driver.execute_script(fr"""
+            fetch('https://gamebanana.com/apiv11/Member/Authenticate', {{
+                'headers': {{
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Content-Type': 'application/json',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin',
+                    'Priority': 'u=0'
+                }},
+                'referrer': 'https://gamebanana.com/members/account/login',
+                'body': '{{
+                    "_sUsername":"{os.getenv("GAMEBANANA_USERNAME").replace(r'"', r'\"').replace('\\', '\\\\')}",
+                    "_sPassword":"{os.getenv("GAMEBANANA_PASSWORD").replace(r'"', r'\"').replace('\\', '\\\\')}",
+                    "_nTotp": "{twofac_code}"
+                }}',
+                'method': 'POST',
+                'mode': 'cors',
+                'credentials': 'include'
+        }});
+        """.replace('\n', ''))
+        driver.implicitly_wait(5)
+        time.sleep(5)
 
-    driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
-    print(driver.execute_script("return document.body.outerHTML"))
+        driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
+        driver.implicitly_wait(5)
+        time.sleep(5)
+
+        try:
+            driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput")
+            print("Success.")
+            break
+        except NoSuchElementException:
+            print("Failure. Retrying...")
 
     # Check exiting file count
     beforeFileCount = driver.execute_script("return $('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length")
+    driver.current_url
 
-    if beforeFileCount == 20:
+    if beforeFileCount >= 20:
+        print("Deleting oldest file...", end="    ")
         # Need to delete oldest file to have enough space
         driver.execute_script("$('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li:last button').click()")
 
@@ -68,24 +82,31 @@ def main():
         alert = wait.until(lambda d : d.switch_to.alert)
         alert.accept()
         
+        print("Done.")
         driver.implicitly_wait(1)
         time.sleep(1)
 
     # Upload file
+    print("Uploading new file...", end="    ")
     driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
     wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
     wait.until(lambda d : beforeFileCount != driver.execute_script("$('return #4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length"))
+    print("Done.")
     driver.implicitly_wait(5)
     time.sleep(5)
 
     # Reorder to be the topmost
+    print("Reordering new file to the top...", end="    ")
     driver.execute_script("$('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li:last').prependTo('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles')")
+    print("Done.")
     driver.implicitly_wait(1)
     time.sleep(1)
 
     # Submit
+    print("Submitting edit...", end="    ")
     driver.execute_script("$('.Submit > button').click()")
     driver.implicitly_wait(10)
+    print("Done.")
 
     driver.quit()
 
