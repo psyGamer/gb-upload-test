@@ -23,6 +23,9 @@ jobs:
           
       - name: Setup Python
         uses: actions/setup-python@v5.2.0
+      - name: Setup Firefox WebDriver
+        uses: browser-actions/setup-firefox@v1.5.2
+
       - name: Setup environment
         run: |
           python -m venv .venv
