@@ -26,8 +26,8 @@ def main():
 
     # Authenticate
     twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
-    driver.execute_script(fr"""
-        fetch('https://gamebanana.com/apiv11/Member/Authenticate', {{
+    fetch_result = driver.execute_script(fr"""
+        return fetch('https://gamebanana.com/apiv11/Member/Authenticate', {{
             'headers': {{
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
                 'Accept': 'application/json, text/plain, */*',
@@ -49,6 +49,7 @@ def main():
             'credentials': 'include'
     }});
     """.replace('\n', ''))
+    print(fetch_result)
     driver.implicitly_wait(3)
     time.sleep(3)
 
