@@ -30,7 +30,7 @@ def main():
     # Retry until login is successful
     while True:
         # Authenticate
-        print("Attempting login...", end="    ")
+        print("Attempting login...", end="    ", flush=True)
         twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
         driver.execute_script(fr"""
             fetch('https://gamebanana.com/apiv11/Member/Authenticate', {{
@@ -64,17 +64,17 @@ def main():
 
         try:
             driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput")
-            print("Success.")
+            print("Success.", flush=True)
             break
         except NoSuchElementException:
-            print("Failure. Retrying...")
+            print("Failure. Retrying...", flush=True)
 
     # Check exiting file count
     beforeFileCount = driver.execute_script("return $('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length")
     driver.current_url
 
     if beforeFileCount >= 20:
-        print("Deleting oldest file...", end="    ")
+        print("Deleting oldest file...", end="    ", flush=True)
         # Need to delete oldest file to have enough space
         driver.execute_script("$('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li:last button').click()")
 
@@ -82,31 +82,31 @@ def main():
         alert = wait.until(lambda d : d.switch_to.alert)
         alert.accept()
         
-        print("Done.")
+        print("Done.", flush=True)
         driver.implicitly_wait(1)
         time.sleep(1)
 
     # Upload file
-    print("Uploading new file...", end="    ")
+    print("Uploading new file...", end="    ", flush=True)
     driver.find_element(By.ID, "4dc48a0d0c19977f4533122b4194fc0f_FileInput").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
     wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
     wait.until(lambda d : beforeFileCount != driver.execute_script("$('return #4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length"))
-    print("Done.")
+    print("Done.", flush=True)
     driver.implicitly_wait(5)
     time.sleep(5)
 
     # Reorder to be the topmost
-    print("Reordering new file to the top...", end="    ")
+    print("Reordering new file to the top...", end="    ", flush=True)
     driver.execute_script("$('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li:last').prependTo('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles')")
-    print("Done.")
+    print("Done.", flush=True)
     driver.implicitly_wait(1)
     time.sleep(1)
 
     # Submit
-    print("Submitting edit...", end="    ")
+    print("Submitting edit...", end="    ", flush=True)
     driver.execute_script("$('.Submit > button').click()")
     driver.implicitly_wait(10)
-    print("Done.")
+    print("Done.", flush=True)
 
     driver.quit()
 
