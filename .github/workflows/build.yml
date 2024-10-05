@@ -18,7 +18,7 @@ jobs:
           submodules: 'recursive'
       - name: Build project
         run: |
-          ecoh hi > test.txt
+          echo hi > test.txt
           zip MyCoolProject.zip test.txt
           
       - name: Setup Python
