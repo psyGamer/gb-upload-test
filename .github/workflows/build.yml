@@ -37,7 +37,8 @@ jobs:
       - name: Upload to GameBanana
         uses: nick-fields/retry@v3
         with:
-          max_attempts: 5
+          timeout_minutes: 10
+          max_attempts: 10
           command: |
             source .venv/bin/activate
             python scripts/gamebanana-upload.py MyCoolProject.zip
