@@ -16,10 +16,6 @@ from selenium.webdriver.firefox.options import Options
 
 def main():
     twofac_code = compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI"))
-    
-    username = sys.argv[1]
-    password = sys.argv[2]
-    twofac_code = sys.argv[3]
 
     # Authenticate
     auth_res = requests.request("POST",
@@ -42,7 +38,7 @@ def main():
     driver.add_cookie({ "name": "sess", "value": auth_res.cookies["sess"]})
     driver.add_cookie({ "name": "rmc", "value": auth_res.cookies["rmc"]})
 
-    driver.get(f"https://gamebanana.com/mods/edit/{os.getenv("GAMEBANANA_MODID")}")
+    driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
 
     # Check exiting file count
     beforeFileCount = driver.execute_script("return $('#4dc48a0d0c19977f4533122b4194fc0f_UploadedFiles li').length")
