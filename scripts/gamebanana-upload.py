@@ -53,7 +53,6 @@ def main():
 
         driver.implicitly_wait(5)
         time.sleep(5)
-        print(driver.execute_script("return document.body.outerHTML"))
     
     driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
     driver.implicitly_wait(5)
