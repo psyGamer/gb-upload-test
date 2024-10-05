@@ -1,0 +1,39 @@
+name: Build CelesteTAS + Studio
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+      - name: Build project
+        run: |
+          ecoh hi > test.txt
+          zip MyCoolProject.zip test.txt
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5.2.0
+      - name: Setup environment
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install requests selenium
+      - name: Upload to GameBanana
+        run: |
+          source .venv/bin/activate
+          python scripts/gamebanana-upload.py MyCoolProject.zip
+        env:
+          GAMEBANANA_USERNAME: AutomaticRelease
+          GAMEBANANA_PASSWORD: ${{ secrets.GAMEBANANA_PASSWORD }}
+          GAMEBANANA_2FA_URI: ${{ secrets.GAMEBANANA_2FA_URI }}
+          GAMEBANANA_MODID: 546692
