@@ -20,9 +20,10 @@ jobs:
           submodules: 'recursive'
       - name: Build project
         run: |
-          echo "PROJECT_NAME=MyCoolProject_$(date +%Y-%m-%d_%H-%M-%S).zip" >> $GITHUB_ENV
+          PROJECT_NAME="MyCoolProject_$(date +%Y-%m-%d_%H-%M-%S).zip"
+          echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_ENV
           echo hi > test.txt
-          zip ${{ env.PROJECT_NAME }} test.txt
+          zip $PROJECT_NAME test.txt
           
       - name: Setup Python
         uses: actions/setup-python@v5.2.0
