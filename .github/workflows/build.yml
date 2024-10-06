@@ -20,8 +20,9 @@ jobs:
           submodules: 'recursive'
       - name: Build project
         run: |
+          echo "PROJECT_NAME=MyCoolProject_$(date +%Y-%m-%d_%H-%M-%S).zip" >> $GITHUB_ENV
           echo hi > test.txt
-          zip MyCoolProject.zip test.txt
+          zip ${{ env.PROJECT_NAME }} test.txt
           
       - name: Setup Python
         uses: actions/setup-python@v5.2.0
@@ -43,7 +44,7 @@ jobs:
           max_attempts: 10
           command: |
             source .venv/bin/activate
-            python scripts/gamebanana-upload.py MyCoolProject.zip
+            python scripts/gamebanana-upload.py ${{ env.PROJECT_NAME }}
         env:
           GAMEBANANA_USERNAME: AutomaticRelease
           GAMEBANANA_PASSWORD: ${{ secrets.GAMEBANANA_PASSWORD }}
