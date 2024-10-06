@@ -3,6 +3,8 @@ name: Build CelesteTAS + Studio
 on:
   workflow_call:
   workflow_dispatch:
+  schedule:
+    - cron:  '0 * * * *'
   push:
     branches:
       - '*'
