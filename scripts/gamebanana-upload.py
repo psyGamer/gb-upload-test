@@ -61,13 +61,13 @@ def main():
     time.sleep(5)
 
     # Check exiting file count
-    beforeFileCount = driver.execute_script("return $('fieldset[id='Files'] ul[id$='_UploadedFiles'] li').length")
+    beforeFileCount = driver.execute_script("return $(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li\").length")
     driver.current_url
 
     if beforeFileCount >= 20:
         print("Deleting oldest file...", end="    ")
         # Need to delete oldest file to have enough space
-        driver.execute_script("$('fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last button').click()")
+        driver.execute_script("$(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last button\").click()")
 
         wait = WebDriverWait(driver, timeout=2)
         alert = wait.until(lambda d : d.switch_to.alert)
@@ -79,16 +79,16 @@ def main():
 
     # Upload file
     print("Uploading new file...", end="    ")
-    driver.execute_script("return $('fieldset[id='Files'] input[id$='_FileInput']')").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
+    driver.execute_script("return $(\"fieldset[id='Files'] input[id$='_FileInput']\")").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
     wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
-    wait.until(lambda d : beforeFileCount != driver.execute_script("$('return fieldset[id='Files'] ul[id$='_UploadedFiles'] li').length"))
+    wait.until(lambda d : beforeFileCount != driver.execute_script("$(\"return fieldset[id='Files'] ul[id$='_UploadedFiles\"] li').length"))
     print("Done.")
     driver.implicitly_wait(5)
     time.sleep(5)
 
     # Reorder to be the topmost
     print("Reordering new file to the top...", end="    ")
-    driver.execute_script("$('fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last').prependTo('fieldset[id='Files'] ul[id$='_UploadedFiles']')")
+    driver.execute_script("$(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last\").prependTo(\"fieldset[id='Files'] ul[id$='_UploadedFiles']\")")
     print("Done.")
     driver.implicitly_wait(1)
     time.sleep(1)
