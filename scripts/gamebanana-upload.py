@@ -53,6 +53,8 @@ def main():
 
         driver.implicitly_wait(5)
         time.sleep(5)
+    else:
+        print(f"2FA not needed ({driver.current_url})")
     
     driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
     driver.implicitly_wait(5)
