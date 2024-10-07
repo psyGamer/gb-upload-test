@@ -81,7 +81,7 @@ def main():
     print("Uploading new file...", end="    ")
     driver.find_element(By.CSS_SELECTOR, "fieldset#Files input[id$='_FileInput']").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
     wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
-    wait.until(lambda d : beforeFileCount != driver.execute_script("$(\"return fieldset[id='Files'] ul[id$='_UploadedFiles\"] li').length"))
+    wait.until(lambda d : beforeFileCount != driver.execute_script("$(\"return fieldset[id='Files'] ul[id$='_UploadedFiles'] li\").length"))
     print("Done.")
     driver.implicitly_wait(5)
     time.sleep(5)
