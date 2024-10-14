@@ -175,6 +175,9 @@ def main():
     )
     print(res)
     print(res.text)
+    print(sess[0:5])
+    print(rmc[0:5])
+
     
     print("Done.", flush=True)
 
