@@ -142,6 +142,31 @@ def main():
     print("Adding update...", end="    ", flush=True)
 
     for i in range(10):
+        print(f"""
+                           return fetch("https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update", {{
+                               "credentials": "include",
+                               "headers": {{
+                                   "User-Agent": "{user_agent}",
+                                   "Accept": "application/json, text/plain, */*",
+                                   "Accept-Language": "en,en-US;q=0.5",
+                                   "Content-Type": "application/json",
+                                   "Sec-Fetch-Dest": "empty",
+                                   "Sec-Fetch-Mode": "cors",
+                                   "Sec-Fetch-Site": "same-origin",
+                                   "Sec-GPC": "1",
+                                   "Priority": "u=0"
+                               }},
+                               "referrer": "https://gamebanana.com/mods/{os.getenv('GAMEBANANA_MODID')}",
+                               "body": '{json.dumps({                  
+                                   "_aChangeLog": update_json,
+                                   "_aFileRowIds": [file_id],
+                                   "_sName": f"CelesteTAS {celestetas_version} / Studio {studio_version}",
+                                   "_sVersion": celestetas_version,
+                                })}',
+                               "method": "POST",
+                               "mode": "cors"
+                           }});
+                           """)
         res = driver.execute_script(f"""
                                return fetch("https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update", {{
                                    "credentials": "include",
@@ -165,7 +190,7 @@ def main():
                                     })}',
                                    "method": "POST",
                                    "mode": "cors"
-                               }}).text();
+                               }});
                                """)
         print(res, flush=True)
         if res["status"] == 200:
