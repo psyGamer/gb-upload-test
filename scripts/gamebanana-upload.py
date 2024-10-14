@@ -141,8 +141,8 @@ def main():
     # Add update
     print("Adding update...", end="    ", flush=True)
 
-    driver.execute_script(f"""
-                           fetch("https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update", {{
+    res = driver.execute_script(f"""
+                           return fetch("https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update", {{
                                "credentials": "include",
                                "headers": {{
                                    "User-Agent": "{user_agent}",
@@ -166,6 +166,8 @@ def main():
                                "mode": "cors"
                            }});
                            """)
+    print(res)
+
     driver.implicitly_wait(5)
     time.sleep(5)
     print("Done.", flush=True)
