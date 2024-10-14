@@ -165,11 +165,14 @@ def main():
                                     })}',
                                    "method": "POST",
                                    "mode": "cors"
-                               }});
+                               }}).text();
                                """)
-        print(res)
+        print(res, flush=True)
         if res["status"] == 200:
             break
+        else:
+            driver.implicitly_wait(5)
+            time.sleep(5)
 
     driver.implicitly_wait(5)
     time.sleep(5)
