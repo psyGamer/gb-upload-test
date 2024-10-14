@@ -134,53 +134,44 @@ def main():
     # Submit edit
     print("Submitting edit...", end="    ", flush=True)
     driver.execute_script("$('.Submit > button').click()")
-    driver.implicitly_wait(10)
+    driver.implicitly_wait(5)
+    time.sleep(5)
     print("Done.", flush=True)
-
-    driver.quit()
 
     # Add update
     print("Adding update...", end="    ", flush=True)
 
-    res = requests.request(
-        method="POST",
-        url=f"https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update",
-        headers={
-            # Most headers are probably not relevant, but seem more like a regular user
-            "Host": "gamebanana.com",
-            "User-Agent": user_agent,
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Referer": f"https://gamebanana.com/mods/{os.getenv('GAMEBANANA_MODID')}",
-            "Content-Type": "application/json",
-            "Origin": "https://gamebanana.com",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "Priority": "u=0",
-        },
-        cookies={
-            "sess": sess,
-            "rmc": rmc,
-            "pw_uuid": pw_uuid,
-            "usprivacy": usprivacy,
-        },
-        json={
-            "_aChangeLog": update_json,
-            "_aFileRowIds": [file_id],
-            "_sName": f"CelesteTAS {celestetas_version} / Studio {studio_version}",
-            "_sVersion": celestetas_version,    
-        },
-    )
-    print(res)
-    print(res.text)
-    print(sess[0:5])
-    print(rmc[0:5])
-
-    
+    driver.execute_script(f"""
+                           fetch("https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update", {{
+                               "credentials": "include",
+                               "headers": {{
+                                   "User-Agent": "{user_agent}",
+                                   "Accept": "application/json, text/plain, */*",
+                                   "Accept-Language": "en,en-US;q=0.5",
+                                   "Content-Type": "application/json",
+                                   "Sec-Fetch-Dest": "empty",
+                                   "Sec-Fetch-Mode": "cors",
+                                   "Sec-Fetch-Site": "same-origin",
+                                   "Sec-GPC": "1",
+                                   "Priority": "u=0"
+                               }},
+                               "referrer": "https://gamebanana.com/mods/{os.getenv('GAMEBANANA_MODID')}",
+                               "body": '{json.dumps({                  
+                                   "_aChangeLog": update_json,
+                                   "_aFileRowIds": [file_id],
+                                   "_sName": f"CelesteTAS {celestetas_version} / Studio {studio_version}",
+                                   "_sVersion": celestetas_version,
+                                })}',
+                               "method": "POST",
+                               "mode": "cors"
+                           }});
+                           """)
+    driver.implicitly_wait(5)
+    time.sleep(5)
     print("Done.", flush=True)
 
+    driver.quit()
+    
 def compute_twofac_code(uri: str) -> str:
     secret, period, digits, algorithm = parse_otpauth_uri(uri)
 
