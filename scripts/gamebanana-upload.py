@@ -1,166 +1,216 @@
 import os
 import sys
-import requests
+import re
 import json
-import time
-import hmac
-import hashlib
-import base64
-import struct
-import urllib.parse
-from dataclasses import dataclass
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.firefox.options import Options
+import requests
+from pprint import pprint
+
+# Map entry in commit message to GameBanana update category / heading in release page
+categories = {
+    "feature": ("Feature", "Features"), 
+    "fix": ("Bugfix", "Bug Fixes"), 
+    "tweak": ("Tweak", "Tweaks"), 
+    "refactor": ("Refactor", "Refactors"), 
+    "remove": ("Removal", "Removals"), 
+    "optimize": ("Optimization", "Optimizations"),
+}
+
+conventional_commit_types = {
+    "feat": 'Features',
+    "fix": 'Bug Fixes',
+    "docs": 'Documentation',
+    "style": 'Styles',
+    "refactor": 'Code Refactoring',
+    "tweak": "Tweaks",
+    "perf": 'Performance Improvements',
+    "test": 'Tests',
+    "build": 'Builds',
+    "ci": 'Continuous Integration',
+    "chore": 'Chores',
+    "revert": 'Reverts',
+    "commit": "Commits",
+}
 
 def main():
-    # Setup browser
-    options = Options()
-    options.add_argument("--headless")
+    commit_message = sys.argv[1]
+    version_info_file = sys.argv[2]
+    gb_changelog_file = sys.argv[3]
+    gh_changelog_file = sys.argv[4]
+
+    # Find CelesteTAS / Studio version
+    celestetas_version = re.search(r"CelesteTAS\s+(v[\d.]+)", commit_message).group(1)
+    studio_version = re.search(r"Studio\s+(v[\d.]+)", commit_message).group(1)
+    with open(version_info_file, "w") as f:
+        f.write(f"{celestetas_version}\n")
+        f.write(f"{studio_version}\n")
+
+    # Find changelog entries
+    changes = []
+    for change_type, change_message in re.findall(r"-\s+([a-zA-Z]+)\s*:\s*(.+)", commit_message):
+        if change_type.lower() not in categories:
+            print(f"Invalid change type '{change_type.lower()}' with message '{change_message}'")
+            continue
+        changes.append((change_type.lower(), change_message))
+
+    # Generate GameBanana changelog
+    gb_changelog = []
+    for change_type, change_message in changes:
+        gb_changelog.append({ "cat": categories[change_type][0], "text": change_message })
+    with open(gb_changelog_file, "w") as f:
+        f.write(json.dumps(gb_changelog))
+
+    # Generate GitHub release
+    gh_changelog = {}
+    for category in categories:
+        gh_changelog[category] = []
+
+    for change_type, change_message in changes:
+        gh_changelog[change_type].append(change_message)
+
+    # Convert to MarkDown
+    gh_markdown = []
+    for category in gh_changelog:
+        changes = gh_changelog[category]
+        if len(changes) == 0:
+            continue
+
+        if len(gh_markdown) != 0:
+            gh_markdown.append("")
+
+        gh_markdown.append(f"## {categories[category][1]}")
+        for change in changes:
+            gh_markdown.append(f"- {change}")
+
+    # Generate commit overview from the current to previous tag
+    gh_repo_owner = os.getenv("GITHUB_REPO_OWNER")
+    gh_repo_name = os.getenv("GITHUB_REPO_NAME")
+    gh_token = os.getenv("GITHUB_TOKEN")
+
+    # Get previous and current tag
+    res = requests.request(
+        method="GET",
+        url=f"https://api.github.com/repos/{gh_repo_owner}/{gh_repo_name}/tags",
+        headers={
+            "Authorization": f"Bearer {gh_token}"
+        },
+    )
+    res_json = res.json()
     
-    driver = webdriver.Firefox(options=options)
+    current_tag = res_json[0]
+    previous_tag = res_json[1]
 
-    # Login
-    driver.get("https://gamebanana.com/members/account/login")
-    driver.implicitly_wait(5)
-    time.sleep(5)
+    print(f"Generating changelog for releases {previous_tag["name"]} to {current_tag["name"]} ...")
 
-    # Remove cookie banner
-    print("Removing cookie banner...", end="    ", flush=True)
-    driver.execute_script("$('.fc-consent-root').remove()")
-    print("Done", flush=True)
-    driver.implicitly_wait(1)
-    time.sleep(1)
-
-    print("Performing username + password login...", end="    ", flush=True)
-    driver.find_element(By.ID, "_sUsername").click()
-    driver.find_element(By.ID, "_sUsername").send_keys(os.getenv("GAMEBANANA_USERNAME"))
-    driver.find_element(By.ID, "_sPassword").click()
-    driver.find_element(By.ID, "_sPassword").send_keys(os.getenv("GAMEBANANA_PASSWORD"))
-    driver.execute_script("$('#UsernameLoginForm button').click()")
-    print("Done", flush=True)
-
-    driver.implicitly_wait(5)
-    time.sleep(5)
-
-    # Enter 2FA code if needed
-    if driver.current_url == "https://gamebanana.com/members/account/login":
-        print("Entering 2FA code...", end="    ", flush=True)    
-        driver.find_element(By.ID, "_nTotp").send_keys(compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI")))
-        print("Done", flush=True)
-
-        driver.implicitly_wait(5)
-        time.sleep(5)
-    else:
-        print(f"2FA not needed")
+    # Get commits between tags
+    parsed_commits = {}
+    for commit_type in conventional_commit_types:
+        parsed_commits[commit_type] = []
     
-    driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
-    driver.implicitly_wait(5)
-    time.sleep(5)
-
-    # Check exiting file count
-    beforeFileCount = driver.execute_script("return $(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li\").length")
-    driver.current_url
-
-    if beforeFileCount >= 20:
-        print("Deleting oldest file...", end="    ")
-        # Need to delete oldest file to have enough space
-        driver.execute_script("$(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last button\").click()")
-
-        wait = WebDriverWait(driver, timeout=2)
-        alert = wait.until(lambda d : d.switch_to.alert)
-        alert.accept()
-        
-        print("Done.")
-        driver.implicitly_wait(1)
-        time.sleep(1)
-
-    # Upload file
-    print("Uploading new file...", end="    ")
-    driver.find_element(By.CSS_SELECTOR, "fieldset#Files input[id$='_FileInput']").send_keys(os.path.join(os.getcwd(), sys.argv[1]))
-    wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
-    wait.until(lambda d : beforeFileCount != driver.execute_script("$(\"return fieldset[id='Files'] ul[id$='_UploadedFiles'] li\").length"))
-    print("Done.")
-    driver.implicitly_wait(5)
-    time.sleep(5)
-
-    # Reorder to be the topmost
-    print("Reordering new file to the top...", end="    ")
-    driver.execute_script("$(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last\").prependTo(\"fieldset[id='Files'] ul[id$='_UploadedFiles']\")")
-    print("Done.")
-    driver.implicitly_wait(1)
-    time.sleep(1)
-
-    # Submit
-    print("Submitting edit...", end="    ")
-    driver.execute_script("$('.Submit > button').click()")
-    driver.implicitly_wait(10)
-    print("Done.")
-
-    driver.quit()
-
-def compute_twofac_code(uri: str) -> str:
-    secret, period, digits, algorithm = parse_otpauth_uri(uri)
-
-    # Get the current time step (based on period)
-    current_time = int(time.time())
-    time_step = current_time // period
-
-    # Generate the TOTP token
-    return get_totp_token(secret, time_step, digits, algorithm)
-
-def parse_otpauth_uri(uri):
-    # Parse the URI
-    parsed_uri = urllib.parse.urlparse(uri)
-    query_params = urllib.parse.parse_qs(parsed_uri.query)
+    next_url = None
+    while True:
+        res = requests.request(
+            method="GET",
+            url=f"https://api.github.com/repos/{gh_repo_owner}/{gh_repo_name}/compare/{previous_tag["commit"]["sha"]}...{current_tag["commit"]["sha"]}"
+                if next_url is None else
+                    next_url,
+            headers={
+                "Authorization": f"Bearer {gh_token}"
+            },
+            params = {
+                # The docs say the maximum is 100, however this doesnt appear to be the case
+                "per_page": 1000
+            }
+        )
+        res_json = res.json()
     
-    # Extract the secret and other parameters
-    secret = query_params.get('secret', [None])[0]
-    period = int(query_params.get('period', [30])[0])
-    digits = int(query_params.get('digits', [6])[0])
-    algorithm = query_params.get('algorithm', ['SHA1'])[0].upper()
-    
-    return secret, period, digits, algorithm
+        for commit_entry in res_json["commits"]:
+            parsed_commit = parse_commit(commit_entry)
+            if parsed_commit is not None:
+                parsed_commits[parsed_commit["commit_type"]].append(parsed_commit)
 
-def base32_decode(encoded_secret):
-    # Add padding if necessary
-    missing_padding = len(encoded_secret) % 8
-    if missing_padding != 0:
-        encoded_secret += '=' * (8 - missing_padding)
-    # Decode the base32 secret
-    return base64.b32decode(encoded_secret.upper())
+        if "link" in res.headers and 'rel="next"' in res.headers["link"]:
+            next_url = re.search(r'(?<=<)([\S]*)(?=>; rel="Next")', res.headers["link"], re.IGNORECASE).group(0)
+        else:
+            break # No more pages left
+        break
 
-def get_totp_token(secret, time_step, digits=6, algorithm='SHA1'):
-    # HMAC key is the decoded secret
-    key = base32_decode(secret)
+    # Generate commit details
+    gh_markdown.append("<details>")
+    gh_markdown.append("<summary><h3>Commit Details</h3></summary>")
     
-    # Convert time_step to bytes (8-byte integer)
-    time_step_bytes = struct.pack('>Q', time_step)
+    for commit_type in parsed_commits:
+        commits = parsed_commits[commit_type]
+        if len(commits) == 0:
+            continue      
+
+        if len(gh_markdown) != 0:
+            gh_markdown.append("")
+
+        gh_markdown.append(f"### {conventional_commit_types[commit_type]}")
+        for commit in commits:
+            prs = [f"[#{pull_request["id"]}]({pull_request["url"]})" for pull_request in commit["pull_requests"]]
+            scope = f"**{commit["commit_scope"]}**: " if commit["commit_scope"] is not None else ""
+            gh_markdown.append(f"- {commit["sha"][0:7]} {scope}{commit["commit_message"]} (@{commit["author"]}) {", ".join(prs)}")
+
+    gh_markdown.append("</details>")
+
+    with open(gh_changelog_file, "w") as f:
+        f.write("\n".join(gh_markdown))
+
+
+def parse_commit(commit_entry):
+    print(f"Parsing commit '{commit_entry["commit"]["message"].splitlines()[0]}'...")
     
-    # Choose the hash function (default to SHA1)
-    if algorithm == 'SHA1':
-        hash_function = hashlib.sha1
-    elif algorithm == 'SHA256':
-        hash_function = hashlib.sha256
-    elif algorithm == 'SHA512':
-        hash_function = hashlib.sha512
-    else:
-        raise ValueError(f"Unsupported algorithm: {algorithm}")
+    commit = commit_entry["commit"]
+    author = commit_entry["author"]
+
+    # Skip merge commits
+    if len(commit_entry["parents"]) != 1:
+        return None
     
-    # Compute HMAC hash
-    hmac_hash = hmac.new(key, time_step_bytes, hash_function).digest()
-    
-    # Extract dynamic binary code from HMAC hash
-    offset = hmac_hash[-1] & 0x0F
-    truncated_hash = hmac_hash[offset:offset + 4]
-    truncated_hash = struct.unpack('>I', truncated_hash)[0] & 0x7FFFFFFF
-    
-    # Get the last 'digits' digits of the number
-    totp_token = truncated_hash % (10 ** digits)
-    
-    return totp_token
+    # Parse commit message
+    commit_message_raw = commit["message"].splitlines()[0]
+    commit_match = re.match(r'^([a-zA-Z]+)\s*(?:\(([a-zA-z]+)\))?\s*:\s*(.+)', commit_message_raw)
+
+    is_conventional_commit = commit_match is not None and commit_match.group(1) in conventional_commit_types
+
+    commit_type = commit_match.group(1) if is_conventional_commit else "commit"
+    commit_scope = commit_match.group(2)  if is_conventional_commit else None
+    commit_message = commit_match.group(3)  if is_conventional_commit else commit_message_raw
+
+    # Link associated pull requests
+    gh_repo_owner = os.getenv("GITHUB_REPO_OWNER")
+    gh_repo_name = os.getenv("GITHUB_REPO_NAME")
+    gh_token = os.getenv("GITHUB_TOKEN")
+
+    res = requests.request(
+        method="GET",
+        url=f"https://api.github.com/repos/{gh_repo_owner}/{gh_repo_name}/commits/{commit_entry["sha"]}/pulls",
+        headers={
+            "Authorization": f"Bearer {gh_token}"
+        },
+        params = {
+            # There aren never going to be more than 100 PRs per commit.
+            "per_page": 100
+        }
+    )
+
+    pull_requests = []
+    if res.status_code == 200:
+        for pull_request_entry in res.json():
+            pull_requests.append({
+                "url": pull_request_entry["url"],
+                "id": pull_request_entry["number"],
+            })
+
+    return {
+        "sha": commit_entry["sha"],
+        "commit_type": commit_type,
+        "commit_scope": commit_scope,
+        "commit_message": commit_message,
+        "author": author["login"],
+        "pull_requests": pull_requests,
+    }
 
 if __name__ == "__main__":
     main()
