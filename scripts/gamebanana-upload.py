@@ -173,6 +173,8 @@ def main():
             "_sVersion": celestetas_version,    
         },
     )
+    print(res)
+    print(res.text)
     
     print("Done.", flush=True)
 
