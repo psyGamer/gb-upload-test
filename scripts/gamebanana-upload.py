@@ -27,12 +27,15 @@ def main():
     with open(update_json_path, "r") as f:
         update_json = json.loads(f.read())
 
+    print(update_json)
+    return
+
     celestetas_version = None
     studio_version = None
     with open(version_info_path, "r") as f:
         lines = f.readlines()
-        celestetas_version = lines[0]
-        studio_version = lines[1]
+        celestetas_version = lines[0].strip()
+        studio_version = lines[1].strip()
     
     # Setup browser
     options = Options()
