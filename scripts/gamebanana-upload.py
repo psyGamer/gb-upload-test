@@ -134,8 +134,8 @@ def main():
     # Submit edit
     print("Submitting edit...", end="    ", flush=True)
     driver.execute_script("$('.Submit > button').click()")
-    driver.implicitly_wait(5)
-    time.sleep(5)
+    driver.implicitly_wait(15)
+    time.sleep(15)
     print("Done.", flush=True)
 
     # Add update
