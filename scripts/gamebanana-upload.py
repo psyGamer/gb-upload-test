@@ -141,32 +141,35 @@ def main():
     # Add update
     print("Adding update...", end="    ", flush=True)
 
-    res = driver.execute_script(f"""
-                           return fetch("https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update", {{
-                               "credentials": "include",
-                               "headers": {{
-                                   "User-Agent": "{user_agent}",
-                                   "Accept": "application/json, text/plain, */*",
-                                   "Accept-Language": "en,en-US;q=0.5",
-                                   "Content-Type": "application/json",
-                                   "Sec-Fetch-Dest": "empty",
-                                   "Sec-Fetch-Mode": "cors",
-                                   "Sec-Fetch-Site": "same-origin",
-                                   "Sec-GPC": "1",
-                                   "Priority": "u=0"
-                               }},
-                               "referrer": "https://gamebanana.com/mods/{os.getenv('GAMEBANANA_MODID')}",
-                               "body": '{json.dumps({                  
-                                   "_aChangeLog": update_json,
-                                   "_aFileRowIds": [file_id],
-                                   "_sName": f"CelesteTAS {celestetas_version} / Studio {studio_version}",
-                                   "_sVersion": celestetas_version,
-                                })}',
-                               "method": "POST",
-                               "mode": "cors"
-                           }});
-                           """)
-    print(res)
+    for i in range(10):
+        res = driver.execute_script(f"""
+                               return fetch("https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update", {{
+                                   "credentials": "include",
+                                   "headers": {{
+                                       "User-Agent": "{user_agent}",
+                                       "Accept": "application/json, text/plain, */*",
+                                       "Accept-Language": "en,en-US;q=0.5",
+                                       "Content-Type": "application/json",
+                                       "Sec-Fetch-Dest": "empty",
+                                       "Sec-Fetch-Mode": "cors",
+                                       "Sec-Fetch-Site": "same-origin",
+                                       "Sec-GPC": "1",
+                                       "Priority": "u=0"
+                                   }},
+                                   "referrer": "https://gamebanana.com/mods/{os.getenv('GAMEBANANA_MODID')}",
+                                   "body": '{json.dumps({                  
+                                       "_aChangeLog": update_json,
+                                       "_aFileRowIds": [file_id],
+                                       "_sName": f"CelesteTAS {celestetas_version} / Studio {studio_version}",
+                                       "_sVersion": celestetas_version,
+                                    })}',
+                                   "method": "POST",
+                                   "mode": "cors"
+                               }});
+                               """)
+        print(res)
+        if res["status"] == 200:
+            break
 
     driver.implicitly_wait(5)
     time.sleep(5)
