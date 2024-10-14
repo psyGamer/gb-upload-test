@@ -1,216 +1,241 @@
 import os
 import sys
-import re
-import json
 import requests
-from pprint import pprint
+import json
+import time
+import hmac
+import hashlib
+import base64
+import struct
+import urllib.parse
+from dataclasses import dataclass
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.firefox.options import Options
 
-# Map entry in commit message to GameBanana update category / heading in release page
-categories = {
-    "feature": ("Feature", "Features"), 
-    "fix": ("Bugfix", "Bug Fixes"), 
-    "tweak": ("Tweak", "Tweaks"), 
-    "refactor": ("Refactor", "Refactors"), 
-    "remove": ("Removal", "Removals"), 
-    "optimize": ("Optimization", "Optimizations"),
-}
-
-conventional_commit_types = {
-    "feat": 'Features',
-    "fix": 'Bug Fixes',
-    "docs": 'Documentation',
-    "style": 'Styles',
-    "refactor": 'Code Refactoring',
-    "tweak": "Tweaks",
-    "perf": 'Performance Improvements',
-    "test": 'Tests',
-    "build": 'Builds',
-    "ci": 'Continuous Integration',
-    "chore": 'Chores',
-    "revert": 'Reverts',
-    "commit": "Commits",
-}
+# Common User-Agent to pretent to be a real user
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
 
 def main():
-    commit_message = sys.argv[1]
-    version_info_file = sys.argv[2]
-    gb_changelog_file = sys.argv[3]
-    gh_changelog_file = sys.argv[4]
+    file_path = sys.argv[1]
+    update_json_path = sys.argv[2]
+    version_info_path = sys.argv[3]
 
-    # Find CelesteTAS / Studio version
-    celestetas_version = re.search(r"CelesteTAS\s+(v[\d.]+)", commit_message).group(1)
-    studio_version = re.search(r"Studio\s+(v[\d.]+)", commit_message).group(1)
-    with open(version_info_file, "w") as f:
-        f.write(f"{celestetas_version}\n")
-        f.write(f"{studio_version}\n")
+    update_json = None
+    with open(update_json_path, "r") as f:
+        update_json = json.loads(f.read())
 
-    # Find changelog entries
-    changes = []
-    for change_type, change_message in re.findall(r"-\s+([a-zA-Z]+)\s*:\s*(.+)", commit_message):
-        if change_type.lower() not in categories:
-            print(f"Invalid change type '{change_type.lower()}' with message '{change_message}'")
-            continue
-        changes.append((change_type.lower(), change_message))
-
-    # Generate GameBanana changelog
-    gb_changelog = []
-    for change_type, change_message in changes:
-        gb_changelog.append({ "cat": categories[change_type][0], "text": change_message })
-    with open(gb_changelog_file, "w") as f:
-        f.write(json.dumps(gb_changelog))
-
-    # Generate GitHub release
-    gh_changelog = {}
-    for category in categories:
-        gh_changelog[category] = []
-
-    for change_type, change_message in changes:
-        gh_changelog[change_type].append(change_message)
-
-    # Convert to MarkDown
-    gh_markdown = []
-    for category in gh_changelog:
-        changes = gh_changelog[category]
-        if len(changes) == 0:
-            continue
-
-        if len(gh_markdown) != 0:
-            gh_markdown.append("")
-
-        gh_markdown.append(f"## {categories[category][1]}")
-        for change in changes:
-            gh_markdown.append(f"- {change}")
-
-    # Generate commit overview from the current to previous tag
-    gh_repo_owner = os.getenv("GITHUB_REPO_OWNER")
-    gh_repo_name = os.getenv("GITHUB_REPO_NAME")
-    gh_token = os.getenv("GITHUB_TOKEN")
-
-    # Get previous and current tag
-    res = requests.request(
-        method="GET",
-        url=f"https://api.github.com/repos/{gh_repo_owner}/{gh_repo_name}/tags",
-        headers={
-            "Authorization": f"Bearer {gh_token}"
-        },
-    )
-    res_json = res.json()
+    celestetas_version = None
+    studio_version = None
+    with open(version_info_path, "r") as f:
+        lines = f.readlines()
+        celestetas_version = lines[0]
+        studio_version = lines[1]
     
-    current_tag = res_json[0]
-    previous_tag = res_json[1]
+    # Setup browser
+    options = Options()
+    options.add_argument("--headless")
 
-    print(f"Generating changelog for releases {previous_tag["name"]} to {current_tag["name"]} ...")
-
-    # Get commits between tags
-    parsed_commits = {}
-    for commit_type in conventional_commit_types:
-        parsed_commits[commit_type] = []
+    profile = webdriver.FirefoxProfile()
+    profile.set_preference("general.useragent.override", user_agent)
     
-    next_url = None
-    while True:
-        res = requests.request(
-            method="GET",
-            url=f"https://api.github.com/repos/{gh_repo_owner}/{gh_repo_name}/compare/{previous_tag["commit"]["sha"]}...{current_tag["commit"]["sha"]}"
-                if next_url is None else
-                    next_url,
-            headers={
-                "Authorization": f"Bearer {gh_token}"
-            },
-            params = {
-                # The docs say the maximum is 100, however this doesnt appear to be the case
-                "per_page": 1000
-            }
-        )
-        res_json = res.json()
+    driver = webdriver.Firefox(options=options)
+
+    # Login
+    driver.get("https://gamebanana.com/members/account/login")
+    driver.implicitly_wait(5)
+    time.sleep(5)
+
+    # Remove cookie banner
+    print("Removing cookie banner...", end="    ", flush=True)
+    driver.execute_script("$('.fc-consent-root').remove()")
+    print("Done", flush=True)
+    driver.implicitly_wait(1)
+    time.sleep(1)
+
+    print("Performing username + password login...", end="    ", flush=True)
+    driver.find_element(By.ID, "_sUsername").click()
+    driver.find_element(By.ID, "_sUsername").send_keys(os.getenv("GAMEBANANA_USERNAME"))
+    driver.find_element(By.ID, "_sPassword").click()
+    driver.find_element(By.ID, "_sPassword").send_keys(os.getenv("GAMEBANANA_PASSWORD"))
+    driver.execute_script("$('#UsernameLoginForm button').click()")
+    print("Done", flush=True)
+
+    driver.implicitly_wait(5)
+    time.sleep(5)
+
+    # Enter 2FA code if needed
+    if driver.current_url == "https://gamebanana.com/members/account/login":
+        print("Entering 2FA code...", end="    ", flush=True)    
+        driver.find_element(By.ID, "_nTotp").send_keys(compute_twofac_code(os.getenv("GAMEBANANA_2FA_URI")))
+        print("Done", flush=True)
+
+        driver.implicitly_wait(5)
+        time.sleep(5)
+    else:
+        print(f"2FA not needed")
     
-        for commit_entry in res_json["commits"]:
-            parsed_commit = parse_commit(commit_entry)
-            if parsed_commit is not None:
-                parsed_commits[parsed_commit["commit_type"]].append(parsed_commit)
+    driver.get(f"https://gamebanana.com/mods/edit/{os.getenv('GAMEBANANA_MODID')}")
+    driver.implicitly_wait(5)
+    time.sleep(5)
 
-        if "link" in res.headers and 'rel="next"' in res.headers["link"]:
-            next_url = re.search(r'(?<=<)([\S]*)(?=>; rel="Next")', res.headers["link"], re.IGNORECASE).group(0)
-        else:
-            break # No more pages left
-        break
+    # Check exiting file count
+    beforeFileCount = driver.execute_script("return $(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li\").length")
+    driver.current_url
 
-    # Generate commit details
-    gh_markdown.append("<details>")
-    gh_markdown.append("<summary><h3>Commit Details</h3></summary>")
-    
-    for commit_type in parsed_commits:
-        commits = parsed_commits[commit_type]
-        if len(commits) == 0:
-            continue      
+    if beforeFileCount >= 20:
+        print("Deleting oldest file...", end="    ", flush=True)
+        # Need to delete oldest file to have enough space
+        driver.execute_script("$(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last button\").click()")
 
-        if len(gh_markdown) != 0:
-            gh_markdown.append("")
+        wait = WebDriverWait(driver, timeout=2)
+        alert = wait.until(lambda d : d.switch_to.alert)
+        alert.accept()
+        
+        print("Done.", flush=True)
+        driver.implicitly_wait(1)
+        time.sleep(1)
 
-        gh_markdown.append(f"### {conventional_commit_types[commit_type]}")
-        for commit in commits:
-            prs = [f"[#{pull_request["id"]}]({pull_request["url"]})" for pull_request in commit["pull_requests"]]
-            scope = f"**{commit["commit_scope"]}**: " if commit["commit_scope"] is not None else ""
-            gh_markdown.append(f"- {commit["sha"][0:7]} {scope}{commit["commit_message"]} (@{commit["author"]}) {", ".join(prs)}")
+    # Upload file
+    print("Uploading new file...", end="    ", flush=True)
+    driver.find_element(By.CSS_SELECTOR, "fieldset#Files input[id$='_FileInput']").send_keys(os.path.join(os.getcwd(), file_path))
+    wait = WebDriverWait(driver, timeout=15, poll_frequency=.2)
+    wait.until(lambda d : beforeFileCount != driver.execute_script("$(\"return fieldset[id='Files'] ul[id$='_UploadedFiles'] li\").length"))
+    print("Done.", flush=True)
+    driver.implicitly_wait(5)
+    time.sleep(5)
 
-    gh_markdown.append("</details>")
+    # Reorder to be the topmost
+    print("Reordering new file to the top...", end="    ", flush=True)
+    driver.execute_script("$(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:last\").prependTo(\"fieldset[id='Files'] ul[id$='_UploadedFiles']\")")
+    print("Done.", flush=True)
+    driver.implicitly_wait(1)
+    time.sleep(1)
 
-    with open(gh_changelog_file, "w") as f:
-        f.write("\n".join(gh_markdown))
+    # Add description
+    print("Adding description to file...", end="    ", flush=True)
+    desc = f"CelesteTAS {celestetas_version}, Studio {studio_version}"
+    driver.execute_script(f"$(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:first .DescriptionInput\")[0].value = '{desc}'")
+    print("Done.", flush=True)
+    driver.implicitly_wait(1)
+    time.sleep(1)
 
+    # Store file ID
+    file_id = driver.execute_script(f"return $(\"fieldset[id='Files'] ul[id$='_UploadedFiles'] li:first input[name='_idFileRow']\")[0].value")
 
-def parse_commit(commit_entry):
-    print(f"Parsing commit '{commit_entry["commit"]["message"].splitlines()[0]}'...")
-    
-    commit = commit_entry["commit"]
-    author = commit_entry["author"]
+    # Retrieve session cookies
+    sess = driver.execute_script("return Cookies.get('sess')")
+    rmc = driver.execute_script("return Cookies.get('rmc')")
+    pw_uuid = driver.execute_script("return Cookies.get('pw_uuid')")
+    usprivacy = driver.execute_script("return Cookies.get('usprivacy')")
 
-    # Skip merge commits
-    if len(commit_entry["parents"]) != 1:
-        return None
-    
-    # Parse commit message
-    commit_message_raw = commit["message"].splitlines()[0]
-    commit_match = re.match(r'^([a-zA-Z]+)\s*(?:\(([a-zA-z]+)\))?\s*:\s*(.+)', commit_message_raw)
+    # Submit edit
+    print("Submitting edit...", end="    ", flush=True)
+    driver.execute_script("$('.Submit > button').click()")
+    driver.implicitly_wait(10)
+    print("Done.", flush=True)
 
-    is_conventional_commit = commit_match is not None and commit_match.group(1) in conventional_commit_types
+    driver.quit()
 
-    commit_type = commit_match.group(1) if is_conventional_commit else "commit"
-    commit_scope = commit_match.group(2)  if is_conventional_commit else None
-    commit_message = commit_match.group(3)  if is_conventional_commit else commit_message_raw
-
-    # Link associated pull requests
-    gh_repo_owner = os.getenv("GITHUB_REPO_OWNER")
-    gh_repo_name = os.getenv("GITHUB_REPO_NAME")
-    gh_token = os.getenv("GITHUB_TOKEN")
+    # Add update
+    print("Adding update...", end="    ", flush=True)
 
     res = requests.request(
-        method="GET",
-        url=f"https://api.github.com/repos/{gh_repo_owner}/{gh_repo_name}/commits/{commit_entry["sha"]}/pulls",
+        method="POST",
+        url=f"https://gamebanana.com/apiv11/Mod/{os.getenv('GAMEBANANA_MODID')}/Update",
         headers={
-            "Authorization": f"Bearer {gh_token}"
+            # Most headers are probably not relevant, but seem more like a regular user
+            "Host": "gamebanana.com",
+            "User-Agent": user_agent,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Referer": f"https://gamebanana.com/mods/{os.getenv('GAMEBANANA_MODID')}",
+            "Content-Type": "application/json",
+            "Origin": "https://gamebanana.com",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "Priority": "u=0",
         },
-        params = {
-            # There aren never going to be more than 100 PRs per commit.
-            "per_page": 100
-        }
+        cookies={
+            "sess": sess,
+            "rmc": rmc,
+            "pw_uuid": pw_uuid,
+            "usprivacy": usprivacy,
+        },
+        json={
+            "_aChangeLog": update_json,
+            "_aFileRowIds": [file_id],
+            "_sName": f"CelesteTAS {celestetas_version} / Studio {studio_version}",
+            "_sVersion": celestetas_version,    
+        },
     )
+    
+    print("Done.", flush=True)
 
-    pull_requests = []
-    if res.status_code == 200:
-        for pull_request_entry in res.json():
-            pull_requests.append({
-                "url": pull_request_entry["url"],
-                "id": pull_request_entry["number"],
-            })
+def compute_twofac_code(uri: str) -> str:
+    secret, period, digits, algorithm = parse_otpauth_uri(uri)
 
-    return {
-        "sha": commit_entry["sha"],
-        "commit_type": commit_type,
-        "commit_scope": commit_scope,
-        "commit_message": commit_message,
-        "author": author["login"],
-        "pull_requests": pull_requests,
-    }
+    # Get the current time step (based on period)
+    current_time = int(time.time())
+    time_step = current_time // period
+
+    # Generate the TOTP token
+    return get_totp_token(secret, time_step, digits, algorithm)
+
+def parse_otpauth_uri(uri):
+    # Parse the URI
+    parsed_uri = urllib.parse.urlparse(uri)
+    query_params = urllib.parse.parse_qs(parsed_uri.query)
+    
+    # Extract the secret and other parameters
+    secret = query_params.get('secret', [None])[0]
+    period = int(query_params.get('period', [30])[0])
+    digits = int(query_params.get('digits', [6])[0])
+    algorithm = query_params.get('algorithm', ['SHA1'])[0].upper()
+    
+    return secret, period, digits, algorithm
+
+def base32_decode(encoded_secret):
+    # Add padding if necessary
+    missing_padding = len(encoded_secret) % 8
+    if missing_padding != 0:
+        encoded_secret += '=' * (8 - missing_padding)
+    # Decode the base32 secret
+    return base64.b32decode(encoded_secret.upper())
+
+def get_totp_token(secret, time_step, digits=6, algorithm='SHA1'):
+    # HMAC key is the decoded secret
+    key = base32_decode(secret)
+    
+    # Convert time_step to bytes (8-byte integer)
+    time_step_bytes = struct.pack('>Q', time_step)
+    
+    # Choose the hash function (default to SHA1)
+    if algorithm == 'SHA1':
+        hash_function = hashlib.sha1
+    elif algorithm == 'SHA256':
+        hash_function = hashlib.sha256
+    elif algorithm == 'SHA512':
+        hash_function = hashlib.sha512
+    else:
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
+    
+    # Compute HMAC hash
+    hmac_hash = hmac.new(key, time_step_bytes, hash_function).digest()
+    
+    # Extract dynamic binary code from HMAC hash
+    offset = hmac_hash[-1] & 0x0F
+    truncated_hash = hmac_hash[offset:offset + 4]
+    truncated_hash = struct.unpack('>I', truncated_hash)[0] & 0x7FFFFFFF
+    
+    # Get the last 'digits' digits of the number
+    totp_token = truncated_hash % (10 ** digits)
+    
+    return totp_token
 
 if __name__ == "__main__":
     main()
