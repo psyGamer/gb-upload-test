@@ -27,9 +27,6 @@ def main():
     with open(update_json_path, "r") as f:
         update_json = json.loads(f.read())
 
-    print(update_json)
-    return
-
     celestetas_version = None
     studio_version = None
     with open(version_info_path, "r") as f:
