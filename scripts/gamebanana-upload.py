@@ -160,7 +160,7 @@ def main():
                                    "_aFileRowIds": [file_id],
                                    "_sName": f"CelesteTAS {celestetas_version} / Studio {studio_version}",
                                    "_sVersion": celestetas_version,
-                                })}',
+                                }).replace("'", "\\'")}',
                                "method": "POST",
                                "mode": "cors"
                            }});
